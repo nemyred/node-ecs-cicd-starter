@@ -1,0 +1,19 @@
+# Node.js
+node_modules/
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate*
+*.bak
+
+# Output/artifacts
+*.zip
+
+# Logs
+*.log
+
+# Misc/unneeded folders
+git-filter-repo/
+AWSCLIV2.msi

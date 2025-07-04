@@ -1,0 +1,53 @@
+name: Deploy to Production
+on:
+  push:
+    branches: [ production ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::145023094407:role/GitHubActionsRole
+          aws-region: us-east-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Build, tag, and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: sprint-freight-app
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      - name: Update ECS task definition
+        run: |
+          aws ecs register-task-definition --cli-input-json file://task-definition.json
+          aws ecs update-service --cluster sprint-freight-cluster \
+            --service sprint-freight-production-service \
+            --task-definition $(aws ecs describe-task-definition \
+            --task-definition sprint-freight-production | jq -r '.taskDefinition.taskDefinitionArn') \
+            --force-new-deployment \
+            --desired-count 1
+      - name: Wait for deployment to stabilize
+        run: |
+          sleep 60
+          aws ecs wait services-stable --cluster sprint-freight-cluster \
+            --services sprint-freight-production-service
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          aws ecs update-service --cluster sprint-freight-cluster \
+            --service sprint-freight-production-service \
+            --task-definition $(aws ecs describe-task-definition \
+            --task-definition sprint-freight-production-prev | jq -r '.taskDefinition.taskDefinitionArn') \
+            --desired-count 1

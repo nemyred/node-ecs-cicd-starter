@@ -1,0 +1,31 @@
+name: Rollback on Deploy Failure
+on:
+  workflow_run:
+    workflows: ["Deploy to Staging", "Deploy to Production"]
+    types: [completed]
+jobs:
+  rollback:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::145023094407:role/GitHubActionsRole
+          aws-region: us-east-1
+      - name: Rollback ECS Service
+        run: |
+          if [[ "${{ github.event.workflow_run.name }}" == "Deploy to Staging" ]]; then
+            aws ecs update-service --cluster sprint-freight-cluster \
+              --service sprint-freight-staging-service \
+              --task-definition $(aws ecs describe-task-definition \
+              --task-definition sprint-freight-staging-prev | jq -r '.taskDefinition.taskDefinitionArn')
+          else
+            aws ecs update-service --cluster sprint-freight-cluster \
+              --service sprint-freight-production-service \
+              --task-definition $(aws ecs describe-task-definition \
+              --task-definition sprint-freight-production-prev | jq -r '.taskDefinition.taskDefinitionArn')
+          fi

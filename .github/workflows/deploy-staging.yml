@@ -1,25 +1,14 @@
 name: Deploy to Staging
+
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-      - name: Install Dependencies
-        run: npm install
-      - name: Run Tests
-        run: npm test
-      - name: Run Linting
-        run: npm run lint
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging' }}
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -27,14 +16,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::145023094407:role/GitHubActionsRole
           aws-region: us-east-1
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+
       - name: Build, tag, and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -42,10 +34,27 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:staging
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - name: Update ECS task definition
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:staging
+
+      # Register current task definition as "prev" for rollback
+      - name: Capture current task definition and register as prev
+        run: |
+          CURRENT_TASK_ARN=$(aws ecs describe-services \
+            --cluster sprint-freight-cluster \
+            --services sprint-freight-staging-service \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          aws ecs describe-task-definition --task-definition $CURRENT_TASK_ARN \
+          | jq '.taskDefinition |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            > task-definition-prev.json
+
+          aws ecs register-task-definition --cli-input-json file://task-definition-prev.json --family sprint-freight-staging-prev
+
+      - name: Register and update ECS task definition
         run: |
           aws ecs register-task-definition --cli-input-json file://task-definition.json
           aws ecs update-service --cluster sprint-freight-cluster \
@@ -54,11 +63,13 @@ jobs:
             --task-definition sprint-freight-staging | jq -r '.taskDefinition.taskDefinitionArn') \
             --force-new-deployment \
             --desired-count 1
+
       - name: Wait for deployment to stabilize
         run: |
           sleep 60
           aws ecs wait services-stable --cluster sprint-freight-cluster \
             --services sprint-freight-staging-service
+
       - name: Rollback on failure
         if: failure()
         run: |

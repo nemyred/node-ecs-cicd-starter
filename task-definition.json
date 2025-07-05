@@ -1,64 +1,64 @@
 {
-    "family": "sprint-freight-staging",
-    "executionRoleArn": "arn:aws:iam::145023094407:role/ECSTaskExecutionRole",
-    "networkMode": "awsvpc",
-    "containerDefinitions": [
-      {
-        "name": "sprint-freight-app",
-        "image": "145023094407.dkr.ecr.us-east-1.amazonaws.com/sprint-freight-app:latest",
-        "cpu": 256,
-        "memory": 1024,
-        "portMappings": [
-          {
-            "containerPort": 3000,
-            "hostPort": 3000,
-            "protocol": "tcp"
-          }
-        ],
-        "essential": true,
-        "environment": [
-          { "name": "PORT", "value": "3000" }
-        ],
-        "secrets": [
-          {
-            "name": "DB_USERNAME",
-            "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials-xxx:username::"
-          },
-          {
-            "name": "DB_PASSWORD",
-            "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials-xxx:password::"
-          },
-          {
-            "name": "DB_HOST",
-            "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials-xxx:host::"
-          },
-          {
-            "name": "DB_PORT",
-            "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials-xxx:port::"
-          },
-          {
-            "name": "DB_DATABASE",
-            "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials-xxx:database::"
-          }
-        ],
-        "logConfiguration": {
-          "logDriver": "awslogs",
-          "options": {
-            "awslogs-group": "/ecs/sprint-freight-staging",
-            "awslogs-region": "us-east-1",
-            "awslogs-stream-prefix": "staging"
-          }
-        },
-        "healthCheck": {
-          "command": ["CMD-SHELL", "curl --fail http://localhost:3000/health || exit 1"],
-          "interval": 30,
-          "timeout": 15,
-          "retries": 5,
-          "startPeriod": 180
+  "family": "sprint-freight-staging",
+  "executionRoleArn": "arn:aws:iam::145023094407:role/ECSTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "sprint-freight-app",
+      "image": "145023094407.dkr.ecr.us-east-1.amazonaws.com/sprint-freight-app:staging",
+      "cpu": 256,
+      "memory": 1024,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
         }
+      ],
+      "essential": true,
+      "environment": [
+        { "name": "PORT", "value": "3000" }
+      ],
+      "secrets": [
+        {
+          "name": "DB_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials:username::"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials:password::"
+        },
+        {
+          "name": "DB_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials:host::"
+        },
+        {
+          "name": "DB_PORT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials:port::"
+        },
+        {
+          "name": "DB_DATABASE",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:145023094407:secret:sprint-freight-db-credentials:database::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sprint-freight-staging",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "staging"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl --fail http://localhost:3000/health || exit 1"],
+        "interval": 30,
+        "timeout": 15,
+        "retries": 5,
+        "startPeriod": 180
       }
-    ],
-    "requiresCompatibilities": ["FARGATE"],
-    "cpu": "256",
-    "memory": "1024"
-  }
+    }
+  ],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "1024"
+}

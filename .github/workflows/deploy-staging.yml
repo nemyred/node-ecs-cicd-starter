@@ -26,8 +26,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::145023094407:role/GitHubActionsRole
-          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -44,7 +44,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:staging
 
-      # Register current task definition as "prev" for rollback
       - name: Capture current task definition and register as prev
         run: |
           CURRENT_TASK_ARN=$(aws ecs describe-services \
@@ -52,21 +51,24 @@ jobs:
             --services sprint-freight-staging-service \
             --query "services[0].taskDefinition" \
             --output text)
-
           aws ecs describe-task-definition --task-definition $CURRENT_TASK_ARN \
-          | jq '.taskDefinition |
-            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            | jq '.taskDefinition | 
+              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
             > task-definition-prev.json
-
           aws ecs register-task-definition --cli-input-json file://task-definition-prev.json --family sprint-freight-staging-prev
 
       - name: Register and update ECS task definition
+        id: register-task
         run: |
           aws ecs register-task-definition --cli-input-json file://task-definition.json
+          TASK_ARN=$(aws ecs describe-task-definition \
+            --task-definition sprint-freight-staging \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "TASK_ARN=$TASK_ARN" >> $GITHUB_ENV
           aws ecs update-service --cluster sprint-freight-cluster \
             --service sprint-freight-staging-service \
-            --task-definition $(aws ecs describe-task-definition \
-            --task-definition sprint-freight-staging | jq -r '.taskDefinition.taskDefinitionArn') \
+            --task-definition $TASK_ARN \
             --force-new-deployment \
             --desired-count 1
 

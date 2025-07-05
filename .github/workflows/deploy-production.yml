@@ -1,7 +1,9 @@
 name: Deploy to Production
+
 on:
   push:
-    branches: [ production ]
+    branches: [ main ]
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -11,14 +13,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::145023094407:role/GitHubActionsRole
           aws-region: us-east-1
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+
       - name: Build, tag, and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -29,7 +34,24 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - name: Update ECS task definition
+
+      # Register current task definition as "prev" for rollback
+      - name: Capture current task definition and register as prev
+        run: |
+          CURRENT_TASK_ARN=$(aws ecs describe-services \
+            --cluster sprint-freight-cluster \
+            --services sprint-freight-production-service \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          aws ecs describe-task-definition --task-definition $CURRENT_TASK_ARN \
+          | jq '.taskDefinition |
+            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+            > task-definition-prev.json
+
+          aws ecs register-task-definition --cli-input-json file://task-definition-prev.json --family sprint-freight-production-prev
+
+      - name: Register and update ECS task definition
         run: |
           aws ecs register-task-definition --cli-input-json file://task-definition.json
           aws ecs update-service --cluster sprint-freight-cluster \
@@ -38,11 +60,13 @@ jobs:
             --task-definition sprint-freight-production | jq -r '.taskDefinition.taskDefinitionArn') \
             --force-new-deployment \
             --desired-count 1
+
       - name: Wait for deployment to stabilize
         run: |
           sleep 60
           aws ecs wait services-stable --cluster sprint-freight-cluster \
             --services sprint-freight-production-service
+
       - name: Rollback on failure
         if: failure()
         run: |

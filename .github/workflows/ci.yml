@@ -18,11 +18,13 @@ jobs:
         working-directory: ./src
       - run: npx eslint .
         working-directory: ./src
-      # Optional: Build artifact step here
-      # - run: npm run build
-      #   working-directory: ./src
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: app-build
-      #     path: src/build/
+
+      # Build artifact step
+      - run: npm run build
+        working-directory: ./src
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-build
+          path: src/build/

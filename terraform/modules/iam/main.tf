@@ -55,13 +55,19 @@ resource "aws_iam_role" "github_actions" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            "token.actions.githubusercontent.com:sub" = "repo:nemyred/cicd-project:ref:refs/heads/main"
+          }
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:nemyred/node-ecs-cicd-starter:ref:refs/heads/main",
+              "repo:nemyred/node-ecs-cicd-starter:ref:refs/heads/staging"
+            ]
           }
         }
       }
     ]
   })
 }
+
 
 resource "aws_iam_role_policy" "github_actions_ecs" {
   name = "ECSPermissions"

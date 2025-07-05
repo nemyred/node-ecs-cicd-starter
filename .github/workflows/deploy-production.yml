@@ -35,23 +35,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      # Register current task definition as "prev" for rollback
-      - name: Capture current task definition and register as prev
-        run: |
-          CURRENT_TASK_ARN=$(aws ecs describe-services \
-            --cluster sprint-freight-cluster \
-            --services sprint-freight-production-service \
-            --query "services[0].taskDefinition" \
-            --output text)
-
-          aws ecs describe-task-definition --task-definition $CURRENT_TASK_ARN \
-          | jq '.taskDefinition |
-            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
-            > task-definition-prev.json
-
-          aws ecs register-task-definition --cli-input-json file://task-definition-prev.json --family sprint-freight-production-prev
-
-      - name: Register and update ECS task definition
+      - name: Update ECS task definition
         run: |
           aws ecs register-task-definition --cli-input-json file://task-definition.json
           aws ecs update-service --cluster sprint-freight-cluster \
